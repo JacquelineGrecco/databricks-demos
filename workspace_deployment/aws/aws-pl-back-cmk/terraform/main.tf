@@ -345,8 +345,9 @@ resource "databricks_storage_credential" "unity_catalog" {
 # Wait for IAM and S3 permissions to propagate
 # This includes time for the IAM role's self-assuming capability to be ready
 # The trust policy is updated via null_resource after role creation
+# Increased to 180s to ensure global IAM propagation for self-assuming role
 resource "time_sleep" "wait_for_storage_credential" {
-  create_duration = "60s"
+  create_duration = "180s"
 
   depends_on = [
     databricks_storage_credential.unity_catalog,
@@ -357,6 +358,35 @@ resource "time_sleep" "wait_for_storage_credential" {
   triggers = {
     trust_policy = module.unity_catalog.trust_policy_updated
   }
+}
+
+# Verify the Unity Catalog IAM role can assume itself before creating external location
+resource "null_resource" "verify_self_assume" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      echo "Verifying Unity Catalog IAM role self-assume capability..."
+      
+      # Get the role's trust policy
+      TRUST_POLICY=$(aws iam get-role --role-name ${module.unity_catalog.unity_catalog_role_name} --query 'Role.AssumeRolePolicyDocument' --output json)
+      
+      echo "Current trust policy:"
+      echo "$TRUST_POLICY" | jq '.'
+      
+      # Check if self-assume is present
+      if echo "$TRUST_POLICY" | jq -e '.Statement[] | select(.Principal.AWS | contains("${module.unity_catalog.unity_catalog_role_arn}"))' > /dev/null; then
+        echo "✅ Self-assume capability verified"
+      else
+        echo "❌ WARNING: Self-assume capability not found in trust policy"
+        echo "This may cause external location creation to fail"
+      fi
+    EOT
+  }
+
+  depends_on = [
+    time_sleep.wait_for_storage_credential,
+    module.unity_catalog
+  ]
 }
 
 # ==================== DATA LAKEHOUSE BUCKET (Separate from infrastructure) ====================
@@ -442,6 +472,7 @@ resource "databricks_external_location" "data_lakehouse" {
 
   depends_on = [
     time_sleep.wait_for_storage_credential,
+    null_resource.verify_self_assume,
     aws_s3_bucket_policy.data_lakehouse
   ]
 }

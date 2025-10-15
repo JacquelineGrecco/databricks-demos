@@ -97,8 +97,9 @@ resource "local_file" "trust_policy" {
 }
 
 # Wait for IAM role to propagate before updating trust policy
+# Increased to 60s to ensure the role exists in all regions
 resource "time_sleep" "wait_for_role_propagation" {
-  create_duration = "30s"
+  create_duration = "60s"
 
   depends_on = [
     aws_iam_role.unity_catalog,
