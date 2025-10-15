@@ -119,10 +119,49 @@ resource "null_resource" "update_trust_policy" {
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
+      set -e  # Exit on any error
       export AWS_PAGER=""
+      
+      echo "=================================================="
+      echo "Updating Unity Catalog IAM role trust policy..."
+      echo "=================================================="
+      echo "Role: ${aws_iam_role.unity_catalog.name}"
+      echo "Policy file: ${abspath(local_file.trust_policy.filename)}"
+      echo ""
+      
+      # Verify the file exists and contains the correct policy
+      if [ ! -f "${abspath(local_file.trust_policy.filename)}" ]; then
+        echo "❌ ERROR: Trust policy file not found!"
+        exit 1
+      fi
+      
+      echo "Policy content to apply:"
+      cat ${abspath(local_file.trust_policy.filename)} | jq '.'
+      echo ""
+      
+      # Update the trust policy
+      echo "Updating IAM role trust policy..."
       aws iam update-assume-role-policy \
         --role-name ${aws_iam_role.unity_catalog.name} \
         --policy-document file://${abspath(local_file.trust_policy.filename)}
+      
+      echo "✅ Trust policy updated successfully"
+      echo ""
+      
+      # Verify the update worked
+      echo "Verifying trust policy update..."
+      CURRENT_POLICY=$(aws iam get-role --role-name ${aws_iam_role.unity_catalog.name} --query 'Role.AssumeRolePolicyDocument' --output json)
+      
+      if echo "$CURRENT_POLICY" | jq -e '.Statement | length == 2' > /dev/null; then
+        echo "✅ Trust policy verified - contains 2 statements (Databricks + self-assume)"
+      else
+        echo "❌ ERROR: Trust policy update may have failed"
+        echo "Current policy:"
+        echo "$CURRENT_POLICY" | jq '.'
+        exit 1
+      fi
+      
+      echo "=================================================="
     EOT
   }
 
