@@ -255,9 +255,9 @@ resource "time_sleep" "wait_before_workspace" {
 
 # Finally, create the workspace
 resource "databricks_mws_workspaces" "ws" {
-  provider        = databricks.mws
-  account_id      = var.databricks_account_id
-  workspace_name  = "${local.name}-ws"
+  provider       = databricks.mws
+  account_id     = var.databricks_account_id
+  workspace_name = "${local.name}-ws"
 
   aws_region               = var.region
   credentials_id           = databricks_mws_credentials.creds.credentials_id
@@ -327,7 +327,7 @@ resource "time_sleep" "wait_for_storage_credential" {
     databricks_storage_credential.unity_catalog,
     module.unity_catalog
   ]
-  
+
   # Ensure trust policy update is complete
   triggers = {
     trust_policy = module.unity_catalog.trust_policy_updated

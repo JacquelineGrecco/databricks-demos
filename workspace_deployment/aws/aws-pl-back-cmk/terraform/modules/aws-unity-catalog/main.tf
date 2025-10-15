@@ -95,7 +95,7 @@ resource "aws_iam_policy" "unity_catalog_self_assume" {
 # Using constructed ARN to avoid circular dependency
 locals {
   unity_catalog_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.prefix}-unity-catalog-role"
-  
+
   updated_trust_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -132,8 +132,8 @@ resource "local_file" "trust_policy" {
 # This adds self-assuming to the trust relationship after the role is created
 resource "null_resource" "update_trust_policy" {
   triggers = {
-    role_name     = aws_iam_role.unity_catalog.name
-    trust_policy  = local.updated_trust_policy
+    role_name    = aws_iam_role.unity_catalog.name
+    trust_policy = local.updated_trust_policy
   }
 
   provisioner "local-exec" {
@@ -187,8 +187,8 @@ resource "aws_iam_role_policy" "unity_catalog" {
         ]
       },
       {
-        Effect = "Allow"
-        Action = "sts:AssumeRole"
+        Effect   = "Allow"
+        Action   = "sts:AssumeRole"
         Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.prefix}-unity-catalog-role"
       }
     ]
