@@ -44,12 +44,14 @@ jobs:
     environment: ${{ github.event.inputs.environment }}
     
     permissions:
-      id-token: write  # Required for OIDC
-      contents: read
+      id-token: write   # Required for OIDC
+      contents: write   # Required for auto-formatting commits
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}  # Use default token for commits
 
       - name: ⚠️ WARNING - About to Destroy Infrastructure
         run: |
