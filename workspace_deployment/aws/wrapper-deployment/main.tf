@@ -1,13 +1,9 @@
 # Example wrapper that uses the Terraform configuration as a module
 # This allows you to reuse the same infrastructure pattern for multiple workspaces
 
-terraform {
-  required_version = ">= 1.5.0"
-}
-
 module "databricks_workspace_private_link_cmk" {
   # Source points to your existing terraform directory
-  source = "../../aws-pl-back-cmk/terraform"
+  source = "../aws-pl-back-cmk/terraform"
 
   # Core Configuration
   project = var.project
