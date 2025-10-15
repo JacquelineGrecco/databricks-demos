@@ -73,8 +73,7 @@ jobs:
           TF_VAR_databricks_account_host: ${{ secrets.DATABRICKS_ACCOUNT_HOST }}
           TF_VAR_databricks_client_id: ${{ secrets.DATABRICKS_CLIENT_ID }}
           TF_VAR_databricks_client_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-          # Add other TF_VAR_* variables as needed
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Terraform Plan Status
         if: steps.plan.outcome == 'failure'
