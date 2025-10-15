@@ -110,10 +110,12 @@ resource "time_sleep" "wait_for_role_propagation" {
 
 # Update trust policy using null_resource and AWS CLI
 # This adds self-assuming to the trust relationship after the role is created
+# Note: Uses timestamp to ensure it runs on every apply (to handle IAM propagation issues)
 resource "null_resource" "update_trust_policy" {
   triggers = {
-    role_name    = aws_iam_role.unity_catalog.name
-    trust_policy = local.updated_trust_policy
+    role_name     = aws_iam_role.unity_catalog.name
+    trust_policy  = local.updated_trust_policy
+    always_run    = timestamp()  # Force re-run on every apply
   }
 
   provisioner "local-exec" {
