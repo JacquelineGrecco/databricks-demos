@@ -128,6 +128,17 @@ resource "local_file" "trust_policy" {
   filename = "${path.root}/.trust_policy_${var.prefix}.json"
 }
 
+# Wait for IAM role to propagate before updating trust policy
+resource "time_sleep" "wait_for_role_propagation" {
+  create_duration = "30s"
+
+  depends_on = [
+    aws_iam_role.unity_catalog,
+    aws_iam_role_policy.unity_catalog,
+    local_file.trust_policy
+  ]
+}
+
 # Update trust policy using null_resource and AWS CLI
 # This adds self-assuming to the trust relationship after the role is created
 resource "null_resource" "update_trust_policy" {
@@ -140,15 +151,14 @@ resource "null_resource" "update_trust_policy" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
       export AWS_PAGER=""
-      /usr/local/bin/aws iam update-assume-role-policy \
+      aws iam update-assume-role-policy \
         --role-name ${aws_iam_role.unity_catalog.name} \
         --policy-document file://${abspath(local_file.trust_policy.filename)}
     EOT
   }
 
   depends_on = [
-    aws_iam_role.unity_catalog,
-    local_file.trust_policy
+    time_sleep.wait_for_role_propagation
   ]
 }
 
