@@ -1,0 +1,177 @@
+name: Destroy Infrastructure
+
+# ⚠️ DANGER: This workflow destroys ALL Terraform-managed resources
+# Only trigger this manually when you're absolutely sure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "DESTROY" to confirm infrastructure deletion'
+        required: true
+        default: ''
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        type: choice
+        options:
+          - aws-pl-back-cmk
+        default: 'aws-pl-back-cmk'
+
+env:
+  TF_VERSION: '1.5.0'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  validate-confirmation:
+    name: Validate Destruction Confirmation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "DESTROY" ]; then
+            echo "❌ ERROR: You must type 'DESTROY' to confirm infrastructure deletion"
+            echo "You typed: '${{ github.event.inputs.confirmation }}'"
+            exit 1
+          fi
+          echo "✅ Confirmation verified"
+
+  terraform-destroy:
+    name: Terraform Destroy
+    needs: validate-confirmation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # Prevent hanging forever
+    environment: ${{ github.event.inputs.environment }}
+    
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚠️ WARNING - About to Destroy Infrastructure
+        run: |
+          echo "=================================================="
+          echo "⚠️  WARNING: INFRASTRUCTURE DESTRUCTION IN PROGRESS"
+          echo "=================================================="
+          echo ""
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Timestamp: $(date)"
+          echo ""
+          echo "The following resources will be DESTROYED:"
+          echo "  - Databricks Workspace"
+          echo "  - Unity Catalog Metastore"
+          echo "  - VPC and Networking (if created)"
+          echo "  - KMS CMK (if created)"
+          echo "  - S3 Buckets (with force_destroy=true)"
+          echo "  - IAM Roles and Policies"
+          echo ""
+          echo "=================================================="
+          echo ""
+          sleep 5
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Option 1: Use OIDC (Recommended)
+          # role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          # aws-region: ${{ env.AWS_REGION }}
+          
+          # Option 2: Use static credentials
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS CLI
+        run: |
+          aws --version
+          aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: terraform init -input=false
+
+      - name: Terraform Plan Destroy
+        id: plan-destroy
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: terraform plan -input=false -destroy -no-color -out=destroy.tfplan
+        env:
+          # Sensitive credentials from GitHub Secrets
+          TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+          TF_VAR_databricks_account_host: ${{ secrets.DATABRICKS_ACCOUNT_HOST }}
+          TF_VAR_databricks_client_id: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          TF_VAR_databricks_client_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          TF_VAR_databricks_crossaccount_role_external_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+
+      - name: Display Destroy Plan
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: |
+          echo "=================================================="
+          echo "📋 Resources to be DESTROYED:"
+          echo "=================================================="
+          terraform show destroy.tfplan
+
+      - name: Final Confirmation Before Destroy
+        run: |
+          echo ""
+          echo "⏳ Waiting 10 seconds before proceeding with destruction..."
+          echo "   Press Ctrl+C to cancel (if running manually)"
+          sleep 10
+          echo "✅ Proceeding with infrastructure destruction..."
+
+      - name: Terraform Destroy
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: terraform apply -input=false -auto-approve destroy.tfplan
+        env:
+          # Sensitive credentials from GitHub Secrets
+          TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+          TF_VAR_databricks_account_host: ${{ secrets.DATABRICKS_ACCOUNT_HOST }}
+          TF_VAR_databricks_client_id: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          TF_VAR_databricks_client_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          TF_VAR_databricks_crossaccount_role_external_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+
+      - name: Verify Destruction
+        run: |
+          echo "=================================================="
+          echo "✅ Infrastructure Destruction Complete"
+          echo "=================================================="
+          echo ""
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Destroyed by: ${{ github.actor }}"
+          echo "Completed at: $(date)"
+          echo ""
+          echo "All Terraform-managed resources have been destroyed."
+          echo ""
+          echo "⚠️  Note: Some resources may take time to fully delete"
+          echo "   (e.g., S3 buckets, KMS keys in deletion window)"
+          echo "=================================================="
+
+      - name: Cleanup Terraform Files
+        if: always()
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: |
+          # Remove state file and lock file after successful destroy
+          rm -f terraform.tfstate
+          rm -f terraform.tfstate.backup
+          rm -f .terraform.lock.hcl
+          rm -f destroy.tfplan
+          echo "✅ Terraform files cleaned up"
+
+      - name: Upload Destroy Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: destroy-logs-${{ github.run_number }}
+          path: |
+            workspace_deployment/aws/aws-pl-back-cmk/terraform/*.log
+          retention-days: 90
+

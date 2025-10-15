@@ -1,0 +1,65 @@
+{
+  "Id": "key-consolepolicy-databricks",
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Enable IAM User Permissions",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:root"
+      },
+      "Action": "kms:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowDatabricksControlPlaneDirectUse",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::414351767826:root"
+      },
+      "Action": [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey",
+        "kms:ReEncrypt*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AllowDatabricksControlPlaneGrants",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::414351767826:root"
+      },
+      "Action": [
+        "kms:CreateGrant",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "Bool": {
+          "kms:GrantIsForAWSResource": "true"
+        }
+      }
+    },
+    {
+      "Sid": "AllowCrossAccountProvisioningRoleGrants",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::<YOUR_AWS_ACCOUNT_ID>:role/<YOUR_CROSS_ACCOUNT_ROLE_NAME>"
+      },
+      "Action": [
+        "kms:CreateGrant",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "Bool": {
+          "kms:GrantIsForAWSResource": "true"
+        }
+      }
+    }
+  ]
+}
+

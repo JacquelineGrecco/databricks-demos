@@ -1,0 +1,104 @@
+name: Terraform Databricks Deployment
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  TF_VERSION: '1.5.0'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  terraform:
+    name: Terraform Plan & Apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # Prevent hanging forever
+    environment: aws-pl-back-cmk  # Use your environment!
+    
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Option 1: Use OIDC (Recommended - no long-lived credentials)
+          # role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          # aws-region: ${{ env.AWS_REGION }}
+          
+          # Option 2: Use static credentials (comment out role-to-assume above)
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS CLI
+        run: |
+          aws --version
+          aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Init
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: terraform plan -input=false -no-color -out=tfplan
+        env:
+          # Non-sensitive config comes from terraform.tfvars (committed to repo)
+          # Only sensitive credentials are passed as environment variables
+          TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+          TF_VAR_databricks_account_host: ${{ secrets.DATABRICKS_ACCOUNT_HOST }}
+          TF_VAR_databricks_client_id: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          TF_VAR_databricks_client_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          TF_VAR_databricks_crossaccount_role_external_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+        continue-on-error: false
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        run: terraform apply -input=false -auto-approve tfplan
+        env:
+          # Same sensitive credentials as plan step
+          TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+          TF_VAR_databricks_account_host: ${{ secrets.DATABRICKS_ACCOUNT_HOST }}
+          TF_VAR_databricks_client_id: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          TF_VAR_databricks_client_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          TF_VAR_databricks_crossaccount_role_external_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+
+      - name: Upload Terraform State
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state
+          path: |
+            workspace_deployment/aws/aws-pl-back-cmk/terraform/terraform.tfstate
+            workspace_deployment/aws/aws-pl-back-cmk/terraform/.terraform.lock.hcl
+          retention-days: 30
