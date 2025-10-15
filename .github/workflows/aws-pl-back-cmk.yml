@@ -9,6 +9,11 @@ on:
       - main
   workflow_dispatch:
 
+# Prevent concurrent runs that could cause state lock conflicts
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false  # Queue new runs instead of cancelling
+
 env:
   TF_VERSION: '1.5.0'
   AWS_REGION: 'us-east-1'
@@ -102,3 +107,12 @@ jobs:
             workspace_deployment/aws/aws-pl-back-cmk/terraform/terraform.tfstate
             workspace_deployment/aws/aws-pl-back-cmk/terraform/.terraform.lock.hcl
           retention-days: 30
+
+      - name: Check State Lock Status
+        if: always()
+        run: |
+          echo "Checking for any remaining state locks..."
+          aws dynamodb get-item \
+            --table-name jg-dbx-terraform-locks \
+            --key '{"LockID": {"S": "jg-dbx-terraform-state/databricks/pl-cmk/terraform.tfstate"}}' \
+            --region us-east-1 || echo "No lock found (expected)"
