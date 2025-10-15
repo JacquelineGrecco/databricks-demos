@@ -208,10 +208,29 @@ resource "databricks_mws_private_access_settings" "pas" {
 }
 
 # Wait for IAM propagation
+# Increased to 120s to ensure global AWS propagation completes
 resource "time_sleep" "wait_for_iam" {
-  create_duration = "60s"
+  create_duration = "120s"
 
   depends_on = [module.iam]
+  
+  triggers = {
+    role_arn = module.iam.cross_account_role_arn
+  }
+}
+
+# Verify IAM role is accessible before Databricks tries to use it
+resource "null_resource" "validate_iam_role" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      echo "Validating IAM role..."
+      aws iam get-role --role-name ${var.project}-databricks-cross-account
+      echo "✅ IAM role validated"
+    EOT
+  }
+
+  depends_on = [time_sleep.wait_for_iam]
 }
 
 # Credentials config (cross-account role Databricks will assume)
@@ -220,7 +239,7 @@ resource "databricks_mws_credentials" "creds" {
   credentials_name = "${local.name}-creds"
   role_arn         = module.iam.cross_account_role_arn
 
-  depends_on = [time_sleep.wait_for_iam]
+  depends_on = [null_resource.validate_iam_role]
 }
 
 # Wait for bucket configuration to propagate

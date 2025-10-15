@@ -42,3 +42,9 @@ output "cross_account_role_arn" {
   value      = aws_iam_role.databricks.arn
   depends_on = [aws_iam_role_policy.databricks_inline]
 }
+
+output "external_id_used" {
+  value       = var.external_id
+  description = "The external ID configured for the cross-account role"
+  sensitive   = true
+}
