@@ -55,10 +55,11 @@ data "aws_iam_policy_document" "bucket_policy" {
     ]
     principals {
       type = "AWS"
-      identifiers = [
+      identifiers = compact([
         var.cross_account_role_arn,
-        "arn:aws:iam::414351767826:root"
-      ]
+        "arn:aws:iam::414351767826:root",
+        var.unity_catalog_role_arn  # Unity Catalog role (if using shared bucket)
+      ])
     }
   }
 }
