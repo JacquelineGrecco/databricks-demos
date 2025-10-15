@@ -40,6 +40,7 @@ jobs:
     name: Terraform Destroy
     needs: validate-confirmation
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # Prevent hanging forever
     environment: ${{ github.event.inputs.environment }}
     
     permissions:
@@ -97,12 +98,12 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
-        run: terraform init
+        run: terraform init -input=false
 
       - name: Terraform Plan Destroy
         id: plan-destroy
         working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
-        run: terraform plan -destroy -no-color -out=destroy.tfplan
+        run: terraform plan -input=false -destroy -no-color -out=destroy.tfplan
         env:
           TF_VAR_region: ${{ env.AWS_REGION }}
           TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
@@ -128,7 +129,7 @@ jobs:
 
       - name: Terraform Destroy
         working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
-        run: terraform apply -auto-approve destroy.tfplan
+        run: terraform apply -input=false -auto-approve destroy.tfplan
         env:
           TF_VAR_region: ${{ env.AWS_REGION }}
           TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
