@@ -98,21 +98,47 @@ jobs:
           TF_VAR_databricks_client_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
           TF_VAR_databricks_crossaccount_role_external_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
 
-      - name: Upload Terraform State
+      - name: Verify State in S3 Backend
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "Verifying Remote State Backend"
+          echo "=========================================="
+          echo ""
+          
+          # Check if state exists in S3
+          echo "📦 Checking S3 state file..."
+          if aws s3 ls s3://jg-dbx-terraform-state/databricks/pl-cmk/terraform.tfstate; then
+            echo "   ✅ State file exists in S3"
+            
+            # Get state file info
+            STATE_SIZE=$(aws s3 ls s3://jg-dbx-terraform-state/databricks/pl-cmk/terraform.tfstate --human-readable | awk '{print $3 " " $4}')
+            echo "   📊 State file size: ${STATE_SIZE}"
+          else
+            echo "   ⚠️  State file not found in S3 (may be first run)"
+          fi
+          echo ""
+          
+          # Check for state lock
+          echo "🔒 Checking state lock status..."
+          LOCK_STATUS=$(aws dynamodb get-item \
+            --table-name jg-dbx-terraform-locks \
+            --key '{"LockID": {"S": "jg-dbx-terraform-state/databricks/pl-cmk/terraform.tfstate"}}' \
+            --region us-east-1 2>/dev/null || echo "{}")
+          
+          if [ "$LOCK_STATUS" == "{}" ] || [ -z "$LOCK_STATUS" ]; then
+            echo "   ✅ No lock found (state is unlocked)"
+          else
+            echo "   ⚠️  Lock still exists:"
+            echo "$LOCK_STATUS" | jq -r '.Item.Info.S' 2>/dev/null || echo "$LOCK_STATUS"
+          fi
+          echo ""
+          echo "=========================================="
+
+      - name: Upload Lock File Only
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: terraform-state
-          path: |
-            workspace_deployment/aws/aws-pl-back-cmk/terraform/terraform.tfstate
-            workspace_deployment/aws/aws-pl-back-cmk/terraform/.terraform.lock.hcl
-          retention-days: 30
-
-      - name: Check State Lock Status
-        if: always()
-        run: |
-          echo "Checking for any remaining state locks..."
-          aws dynamodb get-item \
-            --table-name jg-dbx-terraform-locks \
-            --key '{"LockID": {"S": "jg-dbx-terraform-state/databricks/pl-cmk/terraform.tfstate"}}' \
-            --region us-east-1 || echo "No lock found (expected)"
+          name: terraform-lock-file
+          path: workspace_deployment/aws/aws-pl-back-cmk/terraform/.terraform.lock.hcl
+          retention-days: 7
