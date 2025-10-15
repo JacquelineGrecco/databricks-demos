@@ -52,6 +52,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}  # Use default token for commits
+          ref: ${{ github.head_ref || github.ref_name }}  # Checkout actual branch, not detached HEAD
 
       - name: ⚠️ WARNING - About to Destroy Infrastructure
         run: |
@@ -99,12 +100,12 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: terraform init -input=false
 
       - name: Terraform Plan Destroy
         id: plan-destroy
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: terraform plan -input=false -destroy -no-color -out=destroy.tfplan
         env:
           # Sensitive credentials from GitHub Secrets
@@ -115,7 +116,7 @@ jobs:
           TF_VAR_databricks_crossaccount_role_external_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
 
       - name: Display Destroy Plan
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: |
           echo "=================================================="
           echo "📋 Resources to be DESTROYED:"
@@ -131,7 +132,7 @@ jobs:
           echo "✅ Proceeding with infrastructure destruction..."
 
       - name: Terraform Destroy
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: terraform apply -input=false -auto-approve destroy.tfplan
         env:
           # Sensitive credentials from GitHub Secrets
@@ -159,7 +160,7 @@ jobs:
 
       - name: Cleanup Terraform Files
         if: always()
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: |
           # Remove state file and lock file after successful destroy
           rm -f terraform.tfstate
@@ -174,6 +175,6 @@ jobs:
         with:
           name: destroy-logs-${{ github.run_number }}
           path: |
-            workspace_deployment/aws/aws-pl-back-cmk/terraform/*.log
+            workspace_deployment/aws/wrapper-deployment/*.log
           retention-days: 90
 

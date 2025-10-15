@@ -34,6 +34,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}  # Use default token for commits
+          ref: ${{ github.head_ref || github.ref_name }}  # Checkout actual branch, not detached HEAD
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -59,13 +60,13 @@ jobs:
 
       - name: Terraform Format Check
         id: fmt-check
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: terraform fmt -check -recursive
         continue-on-error: true
 
       - name: Auto-format Terraform Files
         if: steps.fmt-check.outcome == 'failure'
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: |
           echo "⚠️  Terraform files are not properly formatted"
           echo "🔧 Auto-formatting files..."
@@ -75,7 +76,7 @@ jobs:
       - name: Commit Formatted Files
         if: steps.fmt-check.outcome == 'failure'
         run: |
-          cd workspace_deployment/aws/aws-pl-back-cmk/terraform
+          cd workspace_deployment/aws/wrapper-deployment
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -83,21 +84,23 @@ jobs:
             echo "ℹ️  No changes to commit"
           else
             git commit -m "Auto-format Terraform files [skip ci]"
-            git push
-            echo "✅ Formatted files committed and pushed"
+            # Push to the current branch explicitly
+            BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+            git push origin HEAD:${BRANCH_NAME}
+            echo "✅ Formatted files committed and pushed to ${BRANCH_NAME}"
           fi
 
       - name: Terraform Init
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: terraform init -input=false
 
       - name: Terraform Validate
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: terraform validate
 
       - name: Terraform Plan
         id: plan
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: terraform plan -input=false -no-color -out=tfplan
         env:
           # Non-sensitive config comes from terraform.tfvars (committed to repo)
@@ -115,7 +118,7 @@ jobs:
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
+        working-directory: ./workspace_deployment/aws/wrapper-deployment
         run: terraform apply -input=false -auto-approve tfplan
         env:
           # Same sensitive credentials as plan step
@@ -167,5 +170,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-lock-file
-          path: workspace_deployment/aws/aws-pl-back-cmk/terraform/.terraform.lock.hcl
+          path: workspace_deployment/aws/wrapper-deployment/.terraform.lock.hcl
           retention-days: 7
