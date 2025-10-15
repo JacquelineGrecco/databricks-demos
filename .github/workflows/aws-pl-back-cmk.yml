@@ -17,6 +17,7 @@ jobs:
   terraform:
     name: Terraform Plan & Apply
     runs-on: ubuntu-latest
+    environment: aws-pl-back-cmk  # Use your environment!
     
     permissions:
       id-token: write  # Required for OIDC
@@ -49,17 +50,21 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Format Check
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
         run: terraform fmt -check -recursive
         continue-on-error: true
 
       - name: Terraform Init
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
         run: terraform init
 
       - name: Terraform Validate
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
         run: terraform validate
 
       - name: Terraform Plan
         id: plan
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
         run: terraform plan -no-color -out=tfplan
         env:
           TF_VAR_region: ${{ env.AWS_REGION }}
@@ -76,6 +81,7 @@ jobs:
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
         run: terraform apply -auto-approve tfplan
         env:
           TF_VAR_region: ${{ env.AWS_REGION }}
@@ -91,6 +97,6 @@ jobs:
         with:
           name: terraform-state
           path: |
-            terraform.tfstate
-            .terraform.lock.hcl
+            workspace_deployment/aws/aws-pl-back-cmk/terraform/terraform.tfstate
+            workspace_deployment/aws/aws-pl-back-cmk/terraform/.terraform.lock.hcl
           retention-days: 30
