@@ -274,17 +274,19 @@ resource "time_sleep" "wait_before_workspace" {
 }
 
 # Finally, create the workspace
-# NOTE: storage_configuration_id is OMITTED to disable legacy Hive metastore
-# This forces all users to use Unity Catalog exclusively
+# NOTE: storage_configuration_id is REQUIRED for workspace DBFS root
+# This is separate from Unity Catalog metastore - you need BOTH:
+#   - storage_configuration_id = DBFS root (workspace files, libraries, logs)
+#   - Unity Catalog metastore = Data governance layer (your tables/data)
 resource "databricks_mws_workspaces" "ws" {
   provider       = databricks.mws
   account_id     = var.databricks_account_id
   workspace_name = "${local.name}-ws"
 
-  aws_region     = var.region
-  credentials_id = databricks_mws_credentials.creds.credentials_id
-  # storage_configuration_id = databricks_mws_storage_configurations.storage.storage_configuration_id  # REMOVED: Disables Hive metastore
-  network_id = databricks_mws_networks.net.network_id
+  aws_region                   = var.region
+  credentials_id               = databricks_mws_credentials.creds.credentials_id
+  storage_configuration_id     = databricks_mws_storage_configurations.storage.storage_configuration_id
+  network_id                   = databricks_mws_networks.net.network_id
 
   private_access_settings_id = databricks_mws_private_access_settings.pas.private_access_settings_id
 
