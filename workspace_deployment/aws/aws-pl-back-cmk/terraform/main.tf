@@ -150,6 +150,7 @@ module "unity_catalog" {
   databricks_account_id  = var.databricks_account_id
   cross_account_role_arn = module.iam.cross_account_role_arn
   kms_key_arn            = local.kms_key_arn
+  root_bucket_name       = module.storage.root_bucket
 }
 
 # ==================== DATABRICKS ACCOUNT-LEVEL RESOURCES ====================
@@ -300,11 +301,12 @@ resource "time_sleep" "wait_for_workspace" {
 }
 
 # Create Unity Catalog metastore (account-level)
+# Using subdirectory in root bucket for Unity Catalog storage
 resource "databricks_metastore" "this" {
   provider      = databricks.mws
   name          = "${local.name}-metastore"
   region        = var.region
-  storage_root  = "s3://${module.unity_catalog.metastore_bucket_name}/"
+  storage_root  = "s3://${module.unity_catalog.metastore_bucket_name}/${module.unity_catalog.metastore_path}/"
   force_destroy = true
 
   depends_on = [time_sleep.wait_for_workspace]
@@ -353,16 +355,89 @@ resource "time_sleep" "wait_for_storage_credential" {
   }
 }
 
-# Create external location for Unity Catalog
-# The IAM role is updated with self-assuming capability before this runs
-resource "databricks_external_location" "unity_catalog" {
+# ==================== DATA LAKEHOUSE BUCKET (Separate from infrastructure) ====================
+# This is YOUR data bucket - separate from workspace infrastructure
+resource "aws_s3_bucket" "data_lakehouse" {
+  bucket        = "${var.project}-data-lakehouse"
+  force_destroy = true  # Set to false in production to protect your data!
+
+  tags = {
+    Name        = "${var.project}-data-lakehouse"
+    Purpose     = "Databricks Data Lakehouse"
+    Environment = "production"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "data_lakehouse" {
+  bucket = aws_s3_bucket.data_lakehouse.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "data_lakehouse" {
+  bucket = aws_s3_bucket.data_lakehouse.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = local.kms_key_arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "data_lakehouse" {
+  bucket                  = aws_s3_bucket.data_lakehouse.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Bucket policy for data lakehouse
+resource "aws_s3_bucket_policy" "data_lakehouse" {
+  bucket = aws_s3_bucket.data_lakehouse.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowDatabricksAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = [
+            module.unity_catalog.unity_catalog_role_arn,
+            "arn:aws:iam::414351767826:root"
+          ]
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:DeleteObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          aws_s3_bucket.data_lakehouse.arn,
+          "${aws_s3_bucket.data_lakehouse.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Create external location for your data lakehouse
+resource "databricks_external_location" "data_lakehouse" {
   provider        = databricks.workspace
-  name            = "${local.name}-unity-catalog-external"
-  url             = "s3://${module.unity_catalog.metastore_bucket_name}/"
+  name            = "${local.name}-data-lakehouse"
+  url             = "s3://${aws_s3_bucket.data_lakehouse.bucket}/"
   credential_name = databricks_storage_credential.unity_catalog.id
-  force_destroy   = true
+  force_destroy   = true  # Set to false in production!
 
   depends_on = [
-    time_sleep.wait_for_storage_credential
+    time_sleep.wait_for_storage_credential,
+    aws_s3_bucket_policy.data_lakehouse
   ]
 }

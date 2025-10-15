@@ -9,3 +9,9 @@ variable "kms_key_arn" {
   type        = string
   description = "ARN of the KMS key for S3 encryption"
 }
+
+variable "unity_catalog_role_arn" {
+  type        = string
+  description = "ARN of the Unity Catalog IAM role (optional, for shared bucket)"
+  default     = ""
+}

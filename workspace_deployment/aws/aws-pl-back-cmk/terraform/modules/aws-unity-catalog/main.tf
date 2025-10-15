@@ -1,40 +1,8 @@
-# Unity Catalog metastore bucket
-resource "aws_s3_bucket" "metastore" {
-  bucket        = "${var.prefix}-unity-catalog-${var.region}"
-  force_destroy = true
-}
-
-resource "aws_s3_bucket_ownership_controls" "metastore" {
-  bucket = aws_s3_bucket.metastore.id
-  rule {
-    object_ownership = "BucketOwnerPreferred"
-  }
-}
-
-resource "aws_s3_bucket_versioning" "metastore" {
-  bucket = aws_s3_bucket.metastore.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "metastore" {
-  bucket = aws_s3_bucket.metastore.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = var.kms_key_arn
-    }
-    bucket_key_enabled = true
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "metastore" {
-  bucket                  = aws_s3_bucket.metastore.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+# Unity Catalog uses the root bucket with a subdirectory
+# No separate S3 bucket needed - simpler infrastructure!
+locals {
+  metastore_bucket_name = var.root_bucket_name
+  metastore_path        = "unity-catalog"
 }
 
 data "aws_caller_identity" "current" {}
@@ -181,8 +149,8 @@ resource "aws_iam_role_policy" "unity_catalog" {
           "s3:GetBucketLocation"
         ]
         Resource = [
-          aws_s3_bucket.metastore.arn,
-          "${aws_s3_bucket.metastore.arn}/*"
+          "arn:aws:s3:::${local.metastore_bucket_name}",
+          "arn:aws:s3:::${local.metastore_bucket_name}/*"
         ]
       },
       {
@@ -205,35 +173,6 @@ resource "aws_iam_role_policy" "unity_catalog" {
   })
 }
 
-# Bucket policy for Unity Catalog
-data "aws_iam_policy_document" "metastore_bucket_policy" {
-  statement {
-    sid    = "Grant Unity Catalog Access"
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:GetObjectVersion",
-      "s3:PutObject",
-      "s3:PutObjectAcl",
-      "s3:DeleteObject",
-      "s3:ListBucket",
-      "s3:GetBucketLocation"
-    ]
-    resources = [
-      aws_s3_bucket.metastore.arn,
-      "${aws_s3_bucket.metastore.arn}/*"
-    ]
-    principals {
-      type = "AWS"
-      identifiers = [
-        aws_iam_role.unity_catalog.arn
-      ]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "metastore" {
-  bucket = aws_s3_bucket.metastore.id
-  policy = data.aws_iam_policy_document.metastore_bucket_policy.json
-}
+# No separate bucket policy needed - root bucket already has the necessary policy
+# Unity Catalog IAM role will use the root bucket's existing policy
 

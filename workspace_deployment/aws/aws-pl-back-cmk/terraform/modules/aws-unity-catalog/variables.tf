@@ -23,3 +23,8 @@ variable "kms_key_arn" {
   description = "ARN of the KMS key for S3 encryption"
 }
 
+variable "root_bucket_name" {
+  type        = string
+  description = "Name of the root S3 bucket to use for Unity Catalog metastore"
+}
+

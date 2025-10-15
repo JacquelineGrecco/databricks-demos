@@ -8,7 +8,7 @@ set -e
 PROJECT="jg-dbx-cmk"
 REGION="us-east-1"
 ROOT_BUCKET="jg-dbx-pl-root-bucket-cmk"
-UNITY_BUCKET="${PROJECT}-unity-catalog-${REGION}"
+DATA_LAKEHOUSE_BUCKET="${PROJECT}-data-lakehouse"
 STATE_BUCKET="jg-dbx-terraform-state"
 STATE_TABLE="jg-dbx-terraform-locks"
 STATE_KEY="jg-dbx-terraform-state/databricks/pl-cmk/terraform.tfstate"
@@ -180,17 +180,18 @@ else
     echo "      ℹ️  Root bucket not found"
 fi
 
-# Unity Catalog bucket
-echo "   📦 Checking Unity Catalog bucket: ${UNITY_BUCKET}"
-if aws s3 ls s3://${UNITY_BUCKET} &>/dev/null; then
+# Data Lakehouse bucket
+echo "   📦 Checking Data Lakehouse bucket: ${DATA_LAKEHOUSE_BUCKET}"
+if aws s3 ls s3://${DATA_LAKEHOUSE_BUCKET} &>/dev/null; then
+    echo "      ⚠️  WARNING: This bucket contains your actual data!"
     echo "      🗑️  Emptying bucket..."
-    aws s3 rm s3://${UNITY_BUCKET} --recursive --quiet 2>/dev/null || true
+    aws s3 rm s3://${DATA_LAKEHOUSE_BUCKET} --recursive --quiet 2>/dev/null || true
     
     echo "      🗑️  Deleting bucket..."
-    aws s3api delete-bucket --bucket ${UNITY_BUCKET} --region ${REGION} 2>/dev/null || true
-    echo "      ✅ Unity Catalog bucket deleted"
+    aws s3api delete-bucket --bucket ${DATA_LAKEHOUSE_BUCKET} --region ${REGION} 2>/dev/null || true
+    echo "      ✅ Data Lakehouse bucket deleted"
 else
-    echo "      ℹ️  Unity Catalog bucket not found"
+    echo "      ℹ️  Data Lakehouse bucket not found"
 fi
 echo ""
 
@@ -496,7 +497,7 @@ echo ""
 echo "Summary:"
 echo "  ✅ State lock released"
 echo "  ✅ IAM roles and policies deleted"
-echo "  ✅ S3 buckets deleted"
+echo "  ✅ S3 buckets deleted (root + data lakehouse)"
 echo "  ✅ KMS key scheduled for deletion (7 days)"
 echo "  ✅ VPC and networking resources deleted"
 echo ""

@@ -84,6 +84,27 @@ output "root_bucket_name" {
   description = "Workspace root S3 bucket name"
 }
 
+# ==================== DATA LAKEHOUSE OUTPUTS ====================
+output "data_lakehouse_bucket_name" {
+  value       = aws_s3_bucket.data_lakehouse.bucket
+  description = "Data lakehouse S3 bucket name (for your actual data)"
+}
+
+output "data_lakehouse_bucket_arn" {
+  value       = aws_s3_bucket.data_lakehouse.arn
+  description = "Data lakehouse S3 bucket ARN"
+}
+
+output "data_lakehouse_external_location_name" {
+  value       = databricks_external_location.data_lakehouse.name
+  description = "Unity Catalog external location name for data lakehouse"
+}
+
+output "data_lakehouse_external_location_url" {
+  value       = databricks_external_location.data_lakehouse.url
+  description = "Unity Catalog external location URL for data lakehouse"
+}
+
 # ==================== CONFIGURATION INFO ====================
 output "deployment_mode" {
   value = {
@@ -91,5 +112,15 @@ output "deployment_mode" {
     cmk_created = var.create_new_cmk
   }
   description = "Shows whether resources were created (true) or existing resources were used (false)"
+}
+
+output "bucket_summary" {
+  value = {
+    infrastructure_bucket = module.storage.root_bucket
+    infrastructure_usage  = "Workspace DBFS + Unity Catalog metadata"
+    data_lakehouse_bucket = aws_s3_bucket.data_lakehouse.bucket
+    data_lakehouse_usage  = "Your actual data (bronze/silver/gold tables)"
+  }
+  description = "Summary of S3 buckets and their purposes"
 }
 
