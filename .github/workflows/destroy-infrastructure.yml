@@ -105,11 +105,12 @@ jobs:
         working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
         run: terraform plan -input=false -destroy -no-color -out=destroy.tfplan
         env:
-          TF_VAR_region: ${{ env.AWS_REGION }}
+          # Sensitive credentials from GitHub Secrets
           TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
           TF_VAR_databricks_account_host: ${{ secrets.DATABRICKS_ACCOUNT_HOST }}
           TF_VAR_databricks_client_id: ${{ secrets.DATABRICKS_CLIENT_ID }}
           TF_VAR_databricks_client_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          TF_VAR_databricks_crossaccount_role_external_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
 
       - name: Display Destroy Plan
         working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
@@ -131,11 +132,12 @@ jobs:
         working-directory: ./workspace_deployment/aws/aws-pl-back-cmk/terraform
         run: terraform apply -input=false -auto-approve destroy.tfplan
         env:
-          TF_VAR_region: ${{ env.AWS_REGION }}
+          # Sensitive credentials from GitHub Secrets
           TF_VAR_databricks_account_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
           TF_VAR_databricks_account_host: ${{ secrets.DATABRICKS_ACCOUNT_HOST }}
           TF_VAR_databricks_client_id: ${{ secrets.DATABRICKS_CLIENT_ID }}
           TF_VAR_databricks_client_secret: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+          TF_VAR_databricks_crossaccount_role_external_id: ${{ secrets.DATABRICKS_ACCOUNT_ID }}
 
       - name: Verify Destruction
         run: |

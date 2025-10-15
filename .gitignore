@@ -9,8 +9,14 @@
 crash.log
 crash.*.log
 
-# Exclude all .tfvars files, which are likely to contain sensitive data
+# Exclude sensitive .tfvars files
 *.tfvars.json
+*secrets*.tfvars
+*credentials*.tfvars
+
+# Allow non-sensitive tfvars files to be committed
+!terraform.tfvars
+!*.example.tfvars
 
 # Ignore override files as they are usually used to override resources locally
 override.tf
