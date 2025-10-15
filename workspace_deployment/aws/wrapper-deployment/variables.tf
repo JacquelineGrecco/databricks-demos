@@ -87,8 +87,7 @@ variable "databricks_client_secret" {
 
 variable "databricks_crossaccount_role_external_id" {
   type        = string
-  description = "External ID for Databricks cross-account role"
-  default     = var.databricks_account_id
+  description = "External ID for Databricks cross-account role (typically your Databricks account ID)"
 }
 
 # ==================== STORAGE & PRIVATELINK ====================

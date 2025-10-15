@@ -7,7 +7,7 @@ terraform {
 
 module "databricks_workspace_private_link_cmk" {
   # Source points to your existing terraform directory
-  source = "../../aws-pl-back-cmk/terraform"
+  source = "../aws-pl-back-cmk/terraform"
 
   # Core Configuration
   project = var.project
